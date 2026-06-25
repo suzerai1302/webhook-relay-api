@@ -1,4 +1,5 @@
 using System.Text;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -22,9 +23,10 @@ builder.Services.AddOpenApi();
 
 // Tenant resolution context (set by auth) + clock. Registered in all environments.
 builder.Services.AddScoped<ITenantContext, TenantContext>();
-builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton<IClock, WebhookRelay.Infrastructure.SystemClock>();
 builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
+builder.Services.AddSingleton<IApiKeyHasher, Sha256ApiKeyHasher>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -40,7 +42,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
         };
-    });
+    })
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthHandler>(ApiKeyAuthHandler.SchemeName, null);
 builder.Services.AddAuthorization();
 
 // In the Testing environment the test host supplies the DbContext (SQLite) and drives
@@ -91,10 +94,29 @@ app.MapOpenApi();
 app.MapScalarApiReference();
 
 app.UseAuthentication();
+
+// Resolve the tenant from the JWT `tenant` claim so the DbContext query filter is active
+// on every JWT-authenticated request. (API-key auth sets the tenant in its own handler.)
+app.Use(async (ctx, next) =>
+{
+    var claim = ctx.User.FindFirst("tenant")?.Value;
+    if (Guid.TryParse(claim, out var tenantId))
+        ctx.RequestServices.GetRequiredService<ITenantContext>().TenantId = tenantId;
+    await next();
+});
+
 app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapAuthEndpoints();
+app.MapKeysEndpoints();
+
+// Data-plane key check: confirms an API key is valid and reports the tenant it resolves to.
+app.MapGet("/v1/whoami", (ITenantContext tenant) => Results.Ok(new { tenantId = tenant.TenantId }))
+    .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute
+    {
+        AuthenticationSchemes = ApiKeyAuthHandler.SchemeName
+    });
 
 app.Run();
 
