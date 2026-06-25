@@ -1,7 +1,11 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using WebhookRelay.API;
+using WebhookRelay.API.Endpoints;
 using WebhookRelay.Core.Abstractions;
 using WebhookRelay.Infrastructure;
 
@@ -19,6 +23,25 @@ builder.Services.AddOpenApi();
 // Tenant resolution context (set by auth) + clock. Registered in all environments.
 builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
+builder.Services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
+        };
+    });
+builder.Services.AddAuthorization();
 
 // In the Testing environment the test host supplies the DbContext (SQLite) and drives
 // the dispatcher manually — so we skip Postgres, the real HTTP delivery client, and the
@@ -67,7 +90,11 @@ if (!isTesting)
 app.MapOpenApi();
 app.MapScalarApiReference();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapAuthEndpoints();
 
 app.Run();
 
