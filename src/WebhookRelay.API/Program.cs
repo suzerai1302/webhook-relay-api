@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
+using WebhookRelay.API;
+using WebhookRelay.Core.Abstractions;
 using WebhookRelay.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +15,10 @@ if (!string.IsNullOrEmpty(port))
 var isTesting = builder.Environment.IsEnvironment("Testing");
 
 builder.Services.AddOpenApi();
+
+// Tenant resolution context (set by auth) + clock. Registered in all environments.
+builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddSingleton<IClock, SystemClock>();
 
 // In the Testing environment the test host supplies the DbContext (SQLite) and drives
 // the dispatcher manually — so we skip Postgres, the real HTTP delivery client, and the
