@@ -52,9 +52,11 @@ Sqlite 10 for tests) plus **Stripe.net** for billing.
 - **Control plane (JWT, 2h):** register → create Tenant → login. Manage API keys,
   endpoints, billing; read delivery logs. JWT carries `sub` (user id) + `tenant` claim.
 - **Data plane (API key):** `POST /v1/events` authenticates with `whk_live_…` sent as
-  `Authorization: Bearer` or `X-API-Key`. Keys **hashed at rest** (BCrypt or SHA-256
-  of the secret); only a short prefix stored in clear for display; full secret shown
-  once at creation. Custom auth handler resolves the key → tenant.
+  `Authorization: Bearer` or `X-API-Key`. Keys **hashed at rest with SHA-256** (high-
+  entropy secret → fast, constant lookup by hash on every request; bcrypt's per-hash
+  salt would prevent lookup). Only a short prefix stored in clear for display; full
+  secret shown once at creation. Custom auth handler hashes the presented key and
+  resolves it → tenant. (Passwords still use BCrypt.)
 
 ### Tenant isolation
 
