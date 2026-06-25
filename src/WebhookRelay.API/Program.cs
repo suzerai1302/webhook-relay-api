@@ -28,6 +28,10 @@ builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
 builder.Services.AddSingleton<IApiKeyHasher, Sha256ApiKeyHasher>();
 
+// Delivery pipeline pass. Scoped (owns a DbContext per dispatch); driven by the background
+// Dispatcher in real runs and explicitly by the test factory under Testing.
+builder.Services.AddScoped<DeliveryProcessor>();
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -66,6 +70,13 @@ if (!isTesting)
     }
 
     builder.Services.AddDbContext<WebhookRelayDbContext>(options => options.UseNpgsql(pgConn));
+
+    // Real outbound HTTP + the background loop that drains due deliveries.
+    builder.Services.AddHttpClient<IHttpDelivery, HttpDelivery>();
+    builder.Services.AddHostedService(sp => new Dispatcher(
+        sp.GetRequiredService<IServiceScopeFactory>(),
+        sp.GetRequiredService<ILogger<Dispatcher>>(),
+        TimeSpan.FromSeconds(10)));
 }
 
 var app = builder.Build();
@@ -112,6 +123,7 @@ app.MapAuthEndpoints();
 app.MapKeysEndpoints();
 app.MapEndpointsEndpoints();
 app.MapEventsEndpoints();
+app.MapDeliveriesEndpoints();
 
 // Data-plane key check: confirms an API key is valid and reports the tenant it resolves to.
 app.MapGet("/v1/whoami", (ITenantContext tenant) => Results.Ok(new { tenantId = tenant.TenantId }))
