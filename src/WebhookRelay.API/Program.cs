@@ -110,6 +110,7 @@ app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapAuthEndpoints();
 app.MapKeysEndpoints();
+app.MapEndpointsEndpoints();
 
 // Data-plane key check: confirms an API key is valid and reports the tenant it resolves to.
 app.MapGet("/v1/whoami", (ITenantContext tenant) => Results.Ok(new { tenantId = tenant.TenantId }))
