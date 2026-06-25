@@ -1,0 +1,21 @@
+# Render Blueprint — deploys the API as a free Docker web service.
+# Database is an external Neon Postgres (persistent free tier); paste its
+# connection string into DATABASE_URL when prompted at deploy time.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: webhook-relay-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: Jwt__Key
+        generateValue: true          # Render generates a strong secret
+      - key: DATABASE_URL
+        sync: false                  # paste your Neon connection string at deploy time
+      - key: Stripe__SecretKey
+        sync: false                  # Stripe test secret key (sk_test_...)
+      - key: Stripe__WebhookSecret
+        sync: false                  # signing secret of your Stripe webhook endpoint (whsec_...)
+      - key: Stripe__PriceId
+        sync: false                  # the Pro plan recurring price id (price_...)

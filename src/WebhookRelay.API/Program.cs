@@ -19,7 +19,12 @@ if (!string.IsNullOrEmpty(port))
 
 var isTesting = builder.Environment.IsEnvironment("Testing");
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    // Document both auth schemes + mark authed endpoints so Scalar shows Authorize boxes.
+    options.AddDocumentTransformer<SecuritySchemesTransformer>();
+    options.AddOperationTransformer<AuthorizationOperationTransformer>();
+});
 
 // Tenant resolution context (set by auth) + clock. Registered in all environments.
 builder.Services.AddScoped<ITenantContext, TenantContext>();

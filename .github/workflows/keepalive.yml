@@ -1,0 +1,28 @@
+name: Keepalive
+
+# Pings the live API so Render's free tier doesn't spin the service down (it sleeps
+# after ~15 min idle, adding a ~50s cold start). This also keeps the background delivery
+# dispatcher alive. Set the repo variable HEALTHCHECK_URL to your Render base URL
+# after deploying (Settings -> Secrets and variables -> Actions -> Variables);
+# until then this job no-ops instead of failing.
+# Note: GitHub disables scheduled workflows after 60 days of repo inactivity.
+
+on:
+  schedule:
+    - cron: "*/12 * * * *"   # every 12 minutes (UTC)
+  workflow_dispatch: {}        # allow manual runs
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Curl /health
+        run: |
+          URL="${{ vars.HEALTHCHECK_URL }}"
+          if [ -z "$URL" ]; then
+            echo "HEALTHCHECK_URL not set; skipping until the service is deployed."
+            exit 0
+          fi
+          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 90 "$URL/health")
+          echo "health -> $code"
+          test "$code" = "200"
