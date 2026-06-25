@@ -23,14 +23,23 @@ public static class EndpointsEndpoints
 
         group.MapPost("", async (
             CreateEndpointRequest req, WebhookRelayDbContext db,
-            ITenantContext tenant, IClock clock, CancellationToken ct) =>
+            ITenantContext tenant, IClock clock, IPlanCatalog plans, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Url))
                 return Results.Problem(statusCode: 400, title: "url is required.");
 
+            // Quota guard: active endpoints capped per plan.
+            var tenantId = tenant.TenantId!.Value;
+            var plan = (await db.Tenants.FindAsync([tenantId], ct))!.Plan;
+            var max = plans.Limits(plan).MaxEndpoints;
+            var active = await db.Endpoints.CountAsync(e => e.IsActive, ct);
+            if (active >= max)
+                return Results.Problem(statusCode: 403,
+                    title: $"Endpoint quota reached for the {plan} plan ({max}). Upgrade to add more.");
+
             var endpoint = new Endpoint
             {
-                TenantId = tenant.TenantId!.Value,
+                TenantId = tenantId,
                 Url = req.Url,
                 // Per-endpoint secret used to HMAC-sign deliveries (see dispatcher).
                 SigningSecret = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)),

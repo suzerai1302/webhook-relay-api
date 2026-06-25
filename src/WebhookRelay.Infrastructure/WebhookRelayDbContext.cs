@@ -20,9 +20,13 @@ public class WebhookRelayDbContext : DbContext
     public DbSet<Endpoint> Endpoints => Set<Endpoint>();
     public DbSet<Event> Events => Set<Event>();
     public DbSet<Delivery> Deliveries => Set<Delivery>();
+    public DbSet<StripeEvent> StripeEvents => Set<StripeEvent>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        // Global idempotency ledger keyed by Stripe's event id; not tenant-scoped.
+        b.Entity<StripeEvent>(e => e.HasKey(x => x.Id));
+
         b.Entity<Tenant>(e => e.Property(t => t.StripeCustomerId).HasMaxLength(255));
 
         b.Entity<User>(e =>

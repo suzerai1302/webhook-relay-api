@@ -15,10 +15,25 @@ public static class EventsEndpoints
         // Data plane: ingest events with an API key.
         app.MapPost("/v1/events", async (
             IngestRequest req, HttpRequest http, WebhookRelayDbContext db,
-            ITenantContext tenant, IClock clock, CancellationToken ct) =>
+            ITenantContext tenant, IClock clock, IPlanCatalog plans, CancellationToken ct) =>
         {
             var now = clock.UtcNow;
             var tenantId = tenant.TenantId!.Value;
+
+            // Quota guard: events ingested today (UTC) capped per plan → 429 + Retry-After (seconds
+            // until the daily window resets at the next UTC midnight).
+            var plan = (await db.Tenants.FindAsync([tenantId], ct))!.Plan;
+            var maxPerDay = plans.Limits(plan).MaxEventsPerDay;
+            var dayStart = now.Date;
+            var todayCount = await db.Events.CountAsync(e => e.CreatedAt >= dayStart, ct);
+            if (todayCount >= maxPerDay)
+            {
+                var retryAfter = (int)(dayStart.AddDays(1) - now).TotalSeconds;
+                http.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString();
+                return Results.Json(
+                    new { error = $"Daily event quota reached for the {plan} plan ({maxPerDay})." },
+                    statusCode: StatusCodes.Status429TooManyRequests);
+            }
 
             // Idempotent replay: same key for a tenant returns the original event, no new rows.
             var idempotencyKey = http.Headers["Idempotency-Key"].ToString();

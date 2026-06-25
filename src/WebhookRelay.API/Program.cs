@@ -27,6 +27,7 @@ builder.Services.AddSingleton<IClock, WebhookRelay.Infrastructure.SystemClock>()
 builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
 builder.Services.AddSingleton<IApiKeyHasher, Sha256ApiKeyHasher>();
+builder.Services.AddSingleton<IPlanCatalog, PlanCatalog>();
 
 // Delivery pipeline pass. Scoped (owns a DbContext per dispatch); driven by the background
 // Dispatcher in real runs and explicitly by the test factory under Testing.
@@ -70,6 +71,9 @@ if (!isTesting)
     }
 
     builder.Services.AddDbContext<WebhookRelayDbContext>(options => options.UseNpgsql(pgConn));
+
+    // Real Stripe billing adapter (tests inject a fake).
+    builder.Services.AddSingleton<IStripeGateway, StripeGateway>();
 
     // Real outbound HTTP + the background loop that drains due deliveries.
     builder.Services.AddHttpClient<IHttpDelivery, HttpDelivery>();
@@ -124,6 +128,7 @@ app.MapKeysEndpoints();
 app.MapEndpointsEndpoints();
 app.MapEventsEndpoints();
 app.MapDeliveriesEndpoints();
+app.MapBillingEndpoints();
 
 // Data-plane key check: confirms an API key is valid and reports the tenant it resolves to.
 app.MapGet("/v1/whoami", (ITenantContext tenant) => Results.Ok(new { tenantId = tenant.TenantId }))
