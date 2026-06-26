@@ -5,7 +5,7 @@ relay fans each event out to the matching endpoints with HMAC signing, retries w
 exponential backoff, dead-lettering, and per-delivery tracking. Plans and quotas are gated by
 Stripe billing. Built with ASP.NET Core and Entity Framework Core.
 
-> **Live demo:** _deploy pending_ · **Interactive API docs:** `/scalar`
+> **Live demo:** https://webhook-relay-api.onrender.com · **Interactive API docs:** [`/scalar`](https://webhook-relay-api.onrender.com/scalar)
 >
 > _Hosted on Render's free tier — the first request after ~15 min idle takes ~50s to wake, then it's fast._
 
