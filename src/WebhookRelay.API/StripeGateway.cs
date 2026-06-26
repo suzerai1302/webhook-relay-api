@@ -26,12 +26,16 @@ public class StripeGateway : IStripeGateway
             // Carries the tenant identity back to us on checkout.session.completed.
             ClientReferenceId = tenant.Id.ToString(),
             Customer = tenant.StripeCustomerId,
-            SuccessUrl = _config["Stripe:SuccessUrl"] ?? "https://example.com/billing/success",
-            CancelUrl = _config["Stripe:CancelUrl"] ?? "https://example.com/billing/cancel",
+            // Stripe rejects empty strings, so treat blank config as unset and fall back.
+            SuccessUrl = Fallback(_config["Stripe:SuccessUrl"], "https://example.com/billing/success"),
+            CancelUrl = Fallback(_config["Stripe:CancelUrl"], "https://example.com/billing/cancel"),
         };
         var session = await new SessionService().CreateAsync(options, cancellationToken: ct);
         return session.Url;
     }
+
+    private static string Fallback(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value;
 
     public StripeWebhookEvent ConstructEvent(string json, string signatureHeader, string webhookSecret)
     {
